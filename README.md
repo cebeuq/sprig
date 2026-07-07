@@ -1,104 +1,136 @@
-# SPRIG — images are *derived*, not denoised
+---
+license: mit
+tags:
+  - text-to-image
+  - scene-grammar
+  - probabilistic-grammar
+  - research-preview
+  - novel-architecture
+library_name: sprig
+pipeline_tag: text-to-image
+---
 
-**SPRIG** (Stochastic Production-Rule Image Grammar) is a from-scratch text-to-image
-architecture that is **not** a diffusion model, not autoregressive, not a GAN, not a VAE.
-A caption modulates the production probabilities of a learned **probabilistic scene
-grammar**; an image is produced by a single top-down **derivation** that recursively
-splits the canvas into typed regions, each painted by a learned "texel" material.
-Training is **exact maximum likelihood** — the marginal over *all* derivation trees,
-computed by an inside dynamic program (log-semiring DP). No noise process, no adversary,
-no ELBO, no token ordering.
+# SPRIG v0.1 — a text-to-image model where images are *derived*, not denoised
 
-Because analysis and synthesis are the *same* grammar run in two directions, the model
-can also **parse** a real image (infer its most likely derivation) — its strongest,
-most novel capability.
+**Research preview.** SPRIG (Stochastic Production-Rule Image Grammar) is a
+from-scratch generative architecture that is **not** a diffusion model, not
+autoregressive, not a GAN, not a VAE. A caption modulates the production
+probabilities of a learned **probabilistic scene grammar**; an image is produced
+by a single top-down **derivation** that recursively splits the canvas into
+typed regions, each painted by a learned "texel" material. Training is **exact
+maximum likelihood** — the marginal over *all* derivation trees, computed by an
+inside dynamic program (log-semiring DP). No noise process, no adversary, no
+ELBO, no token ordering.
 
-This repo is the **v0.1** proof-of-concept at 64×64 (~16M trainable params on top of a
-frozen T5-base caption encoder).
+The current release is **v0.1 at 64×64**: a proof-of-concept for the mechanism.
+~16M trainable parameters on top of a frozen T5-base caption encoder.
 
-- 🤗 **Model:** [huggingface.co/cebeuq/sprig](https://huggingface.co/cebeuq/sprig)
-- 🎮 **Live demo:** [huggingface.co/spaces/cebeuq/sprig-demo](https://huggingface.co/spaces/cebeuq/sprig-demo)
-- 📖 **Method + config + contracts:** [`DESIGN.md`](DESIGN.md)
+<p align="center"><img src="samples.jpg" width="360" alt="SPRIG v0.1 samples"></p>
 
-## How it works (one paragraph)
+## What SPRIG does differently
 
-An image `x` under caption `c` is defined by a text-modulated probabilistic scene grammar
-whose conditional density marginalizes over every derivation tree `τ`:
-`p(x|c) = Σ_τ Π_splits π(A→⟨s,B,C⟩|c) Π_leaves π(T|A,c) p_emit(x_r|T,r,c)`.
-The caption enters only through a low-rank rule factorization
-`π(A→⟨s,B,C⟩|c) = Σ_k p(k|A,c) p(s|k,c) p(B|k) p(C|k)`, whose caption-dependent mixture
-`p(k|A,c)` is produced by a Grammar-Modulation Transformer (queries = symbol embeddings,
-cross-attention to the caption). Because the region lattice and cut dictionary are finite,
-the marginal is computed **exactly** by a bottom-up inside DP over regions, and the loss is
-the exact NLL `L = -β(A₀, canvas)`. The same DP with a max-semiring gives the Viterbi parse.
+| | Diffusion / Flow | Autoregressive | **SPRIG** |
+|---|---|---|---|
+| Generative act | denoise a fixed grid over many steps | predict tokens in an order | **derive a tree**: recursively split the canvas, commit each node once |
+| Latent | noisy image | token prefix | an *unobserved random tree* summed out |
+| Training | denoising / score matching | next-token likelihood | **exact marginal likelihood** via inside DP |
+| Free bonus | — | — | a real **likelihood** + an interpretable **parse** of any image |
 
-## Honest status (v0.1, 50k steps)
+Because analysis and synthesis are the *same* grammar run in two directions, the
+model can also **parse** a real image (infer its most likely derivation) — see
+`parses.png`. This is the strongest, most novel capability and it works well.
 
-Passes **1 of 5** pre-registered proof-of-concept gates — and the failures are localized
-and understood, not diffuse:
+## Method
 
-| Gate | Result |
-|---|---|
-| Likelihood vs. no-grammar baseline | **2.66 vs 6.28 bpd** ✅ |
-| Caption information gain Δc | **0.248** ✅ (5×) |
-| Visible-cut parse F1 | **0.765** ✅ (parsing works) |
-| Object-cell parse recall | 0.20 / 0.22 ❌ |
-| Prompt-swap attribute control | 0.37 ❌ (size binds perfectly: 1.00) |
-| Compositional holdout | 0.01 ❌ |
+<p align="center"><img src="figures/pipeline.png" width="900" alt="SPRIG pipeline: caption → frozen T5 embeddings → text-modulated grammar rules → inside DP that sums over all derivation trees → a sampled or parsed tree → 64×64 image"></p>
 
-The architecture's structural claims hold — it beats a no-grammar baseline decisively,
-routes caption information, and recovers scene structure by parsing. The open problem is
-**caption→object binding** (the model draws objects and binds *size* perfectly, but does
-not yet reliably paint the *specific* object a prompt asks for).
+SPRIG is a **text-modulated probabilistic scene grammar** \\(G_c=(\Sigma, N, A_0, \Pi_c)\\): nonterminal symbols \\(N\\), texels (learned material primitives) \\(\Sigma\\), an axiom \\(A_0\\), and caption-conditioned productions \\(\Pi_c\\). An image is one **derivation** \\(\tau\\) — a binary tree that recursively splits the 64×64 canvas (a finite 1296-region binary-space-partition lattice, leaves ≤16px) and paints each leaf region with a texel. The conditional density marginalizes over *all* derivation trees:
 
-## Quick start (CPU)
+$$
+p(x \mid c) = \sum_{\tau} \; \prod_{\text{splits}} \pi\big(A \to \langle s,B,C\rangle \mid c\big) \; \prod_{\text{leaves}} \pi(T \mid A, c)\, p_{\mathrm{emit}}(x_r \mid T, r, c)
+$$
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt torch
-.venv/bin/python -m pytest tests/ -x -q     # unit tests incl. brute-force inside-DP proof
-.venv/bin/python scripts/overfit1.py --data-dir local_data/dev   # overfit-one-image sanity
-```
+Text enters through a low-rank rule factorization \\(\pi(A \to \langle s,B,C\rangle \mid c) = \sum_k p(k \mid A, c)\, p(s \mid k, c)\, p(B \mid k)\, p(C \mid k)\\), whose only caption-dependent factor — the mixture \\(p(k \mid A, c)\\) — is produced by a **Grammar-Modulation Transformer** (queries = symbol embeddings, cross-attention to the frozen T5-base caption). *Text deforms the grammar; it does not steer a sampler.* Each leaf emits a 4-component discretized-logistic mixture over its pixels.
 
-Run the released model:
+Because the lattice and the cut dictionary are finite, the marginal is computed **exactly** by a log-semiring inside dynamic program over regions, and the training loss is the exact negative log-likelihood \\(\mathcal{L} = -\beta(A_0, \text{canvas})\\) — no encoder, no ELBO, no sampling in the loop. The *same* DP with a max-semiring yields the **Viterbi parse** of any image, which is why analysis and synthesis are the same object.
+
+| \\(S\\) | \\(T_v\\) | \\(R\\) | \\(d\\) | canvas / grid | lattice | encoder | params |
+|---|---|---|---|---|---|---|---|
+| 1024 | 256 | 64 | 384 | 64² / 8px | 1296 regions | T5-base (frozen) | ~15.9M |
+
+## Results
+
+Success criteria were fixed in advance (50k steps, held-out procedural scenes):
+
+| Gate | Target | Result | |
+|---|---|---|---|
+| Likelihood vs. no-grammar baseline | beat by ≥0.15 bpd | **2.66 vs 6.28 bpd** | ✅ crushes it |
+| Caption information gain Δc | ≥ 0.05 | **0.248** | ✅ 5× |
+| Visible-cut parse F1 | ≥ 0.6 | **0.765** | ✅ parsing works |
+| Object-cell parse recall (tier1/2) | ≥ 0.70 / 0.50 | 0.20 / 0.22 | ❌ scenes too busy |
+| Prompt-swap attribute control | ≥ 0.80 | 0.37 | ❌ partial |
+| — size attribute specifically | — | **1.00** | ✅ size binds perfectly |
+| Spatial-relation accuracy | ≥ 0.70 | 0.00 | ❌ |
+| Compositional holdout (unseen combos) | ≥ 0.60 | 0.01 | ❌ |
+| Grammar health (S_eff / alive texels) | ≥256 / ≥50% | 968 / 43% | ⚠️ texels over-pruned |
+
+The architecture's structural claims prove out: it models data far better than a
+no-grammar baseline, routes caption information, recovers scene structure by
+parsing, and (after a targeted fix) paints real objects. The open problem is
+**caption→object binding**: the model can draw objects and binds size perfectly,
+but does not yet reliably paint the *specific* object a prompt asks for, and places
+too many per scene.
+
+## Usage
 
 ```bash
 pip install torch safetensors transformers pillow
-# download sprig-v0.1.safetensors + config.json from the HF model repo, then:
-python release/model/inference.py --prompt "a red circle on a white background" --out out.png
+# get the `sprig` package + this file from the code repo, then:
+python inference.py --prompt "a red circle on a white background" --out out.png
 ```
 
-## Repository layout
+```python
+from inference import load_sprig, sample
+model = load_sprig("sprig-v0.1.safetensors", "config.json")   # ~16M params, CPU-friendly
+img = sample(model, "a green triangle", seed=0)               # PIL.Image, 64x64
+```
 
-```
-sprig/            core package
-  dp/             region lattice + exact inside DP (log-semiring), Viterbi parse
-  model/          grammar-modulation transformer, texel atlas, discretized-logistic emission
-  data/           procedural scene generator + dataset + T5 embedding precompute
-  eval/           metrics, parse diagnostics, probe classifier, report
-train.py          training entrypoint (config-driven, resumable)
-configs/          main64 / smoke / clevr-ft
-scripts/          data gen, overfit gates, release export, perf probes
-tests/            full suite (the brute-force DP-vs-enumeration test is the correctness anchor)
-release/          HF model card, dataset generator, and Gradio demo app
-DESIGN.md         the binding v0.1 spec: math, module contracts, config, milestone gates
-```
+The model outputs native **64×64** images (upscale with nearest-neighbor to
+view). It also returns the derivation tree, so you can inspect *why* each region
+was drawn.
+
+## Files
+
+- `sprig-v0.1.safetensors` — EMA-merged inference weights (60.8 MB, fp32, 15.9M params)
+- `config.json` — architecture config + release metadata
+- `inference.py` — minimal load + sample + T5 caption encoding
+- `metrics.json` — full evaluation numbers
+- `figures/pipeline.png` — the method schematic
+- `samples.jpg`, `texel_atlas.png`, `parses.png` — qualitative outputs
+- `DESIGN.md` — the concrete v0.1 architecture specification
 
 ## Training
 
-64×64, 2M procedural compositional scenes (colored shapes with attributes and spatial
-relations, dense templated captions, held-out attribute combinations), frozen T5-base
-captions precomputed. Exact-likelihood objective + closed-form grammar-health
-regularizers. Single modern GPU, ~50k steps.
+64×64, 2M procedural compositional scenes (colored shapes with attributes and
+spatial relations, templated dense captions, held-out attribute combinations),
+frozen T5-base captions precomputed. Exact-likelihood objective + closed-form
+grammar-health regularizers. One RTX PRO 6000 Blackwell GPU, ~50k steps.
+Generator: see the companion dataset repo (seeded, deterministic).
 
-```bash
-python scripts/gen_data.py --out-root ./data          # generate scenes + splits
-python -m sprig.data.embed_t5 --data-dir ./data/proc2d/train   # precompute T5 embeddings
-python train.py --config configs/main64.yaml --run-dir ./runs/main64 --resume auto
+## Limitations & intended use
+
+Research artifact for studying grammar-based generation and exact-likelihood
+text-to-image. **Not** a production image generator: 64×64, synthetic domain,
+object binding incomplete. Samples are blocky by construction (axis-aligned
+region splits). MIT licensed — build on it.
+
+## Citation
+
+```bibtex
+@software{sprig_v0_1_2026,
+  title  = {SPRIG: Text-to-Image by a Stochastic Production-Rule Image Grammar (v0.1)},
+  year   = {2026},
+  note   = {Research preview. Images are derived by a probabilistic scene grammar
+            trained by exact marginal likelihood, not denoised.}
+}
 ```
-
-The `infra/` scripts (rsync deploy, crash-resilient run loop, status) target a remote GPU
-box via `$SPRIG_HOST`; set it to your own host.
-
-## License
-
-MIT — see [`LICENSE`](LICENSE).

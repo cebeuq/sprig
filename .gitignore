@@ -18,3 +18,4 @@ release/model/*.jpg
 release/model/*.png
 release/space/*.safetensors
 release/space/config.json
+/local_runs/
