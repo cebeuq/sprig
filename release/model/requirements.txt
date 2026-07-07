@@ -1,0 +1,6 @@
+torch
+safetensors
+transformers
+pillow
+numpy
+einops

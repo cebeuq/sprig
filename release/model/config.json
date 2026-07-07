@@ -1,0 +1,23 @@
+{
+  "architecture": "SPRIG",
+  "version": "0.1",
+  "weights_file": "sprig-v0.1.safetensors",
+  "weights_merged": "ema",
+  "trained_steps": 50000,
+  "canvas_px": 64,
+  "grid_px": 8,
+  "model": {
+    "S": 1024,
+    "R": 64,
+    "T_v": 256,
+    "d": 384,
+    "canvas": 64,
+    "grid": 8,
+    "emb_dim": 768,
+    "L_max": 64,
+    "leaf_chunk": 8,
+    "texel_hinge_weight": 0.5,
+    "emission_obj_weight": 12.0
+  },
+  "note": "Inference-only export: EMA-merged weights, buffers eta/tau are re-initialised at load (tau=1.0, eta=0.0)."
+}

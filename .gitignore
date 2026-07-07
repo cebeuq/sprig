@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+local_data/
+runs/
+*.pt
+*.u8
+*.f16
+*.i64
+.sync_meta
+.DS_Store
+
+# release staging: big binaries + vendored package copies live only on HF
+release/**/sprig/
+release/model/*.safetensors
+release/model/*.jpg
+release/model/*.png
+release/space/*.safetensors
+release/space/config.json

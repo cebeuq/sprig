@@ -1,0 +1,82 @@
+run_name: smoke64
+seed: 0
+device: cuda
+model:
+  S: 1024
+  R: 64
+  T_v: 256
+  d: 384
+  canvas: 64
+  grid: 8
+  emb_dim: 768
+  L_max: 64
+  leaf_chunk: 8
+data:
+  train_dir: ~/data/sprig/proc2d/train
+  val_dir: ~/data/sprig/proc2d/val
+  val_fast_dir: ~/data/sprig/proc2d/val_fast
+  test_dir: ~/data/sprig/proc2d/test
+  parse_eval_dir: ~/data/sprig/proc2d/parse_eval
+  null_emb: ~/data/sprig/t5/null.f16
+  p_null: 0.1
+  num_workers: 8
+train:
+  batch_size: 256
+  total_steps: 200000
+  lr_tables: 0.0003
+  lr_networks: 0.0001
+  betas:
+  - 0.9
+  - 0.95
+  weight_decay: 0.0
+  warmup_steps: 2000
+  lr_decay_steps: 250000
+  lr_min_ratio: 0.1
+  grad_clip: 1.0
+  ema: 0.9999
+  tau_start: 2.0
+  tau_end: 1.0
+  tau_steps: 50000
+  eta_update_every: 2000
+  eta_band:
+  - 0.5
+  - 3.0
+  eta_max: 1.5
+  eta_step_up: 0.05
+  eta_step_down: 0.05
+  eta_final_anneal_steps: 20000
+  texel_dead_frac: 0.1
+  tier_schedule:
+  - until: 20000
+    weights:
+    - 0.55
+    - 0.35
+    - 0.1
+    - 0.0
+  - until: 60000
+    weights:
+    - 0.25
+    - 0.35
+    - 0.3
+    - 0.1
+  - until: null
+    weights:
+    - 0.1
+    - 0.3
+    - 0.4
+    - 0.2
+eval:
+  scalars_every: 50
+  val_fast_every: 250
+  parse_every: 500
+  full_every: 100000
+  val_fast_n: 256
+  full_val_n: 20000
+  parse_images: 32
+  prompt_grid_n: 8
+  bank_seeds: 8
+  eval_batch_size: 64
+  prompt_bank_emb: ~/data/sprig/t5/prompt_bank.pt
+checkpoint:
+  every_minutes: 2
+  every_steps: 500

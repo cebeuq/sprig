@@ -1,0 +1,78 @@
+{
+  "metrics": {
+    "bpd_val": 2.6107561223037,
+    "bpd_per_tier": {
+      "0": 2.2038232899707055,
+      "1": 2.3735981695328294,
+      "2": 2.6973096096747566,
+      "3": 3.006890315533517
+    },
+    "bpd_tier_ge1": 2.656977891677827,
+    "n": 2000,
+    "delta_c": 0.24781480995112007,
+    "caption_swap_win_frac": 0.25,
+    "b0_bpd": 6.28435796590519,
+    "tree": {
+      "visible_cut_f1": 0.7648812746568768,
+      "leaf_ari": 0.5688396790527814,
+      "recall_per_tier": {
+        "0": 0.19008264462809918,
+        "3": 0.4357142857142857,
+        "1": 0.20238095238095238,
+        "2": 0.22413333333333335
+      },
+      "recall_tier1": 0.20238095238095238,
+      "recall_tier2": 0.22413333333333335
+    },
+    "prompt_swap": {
+      "per_pair": {
+        "a red circle -> a blue circle": 0.0625,
+        "a green square -> a purple square": 0.015625,
+        "a yellow diamond -> a cyan diamond": 0.921875,
+        "an orange ring -> a magenta ring": 0.078125,
+        "a red circle to the left of a blue square -> a red circle to the right of a blue square": 0.0,
+        "a green circle above a yellow square -> a green circle below a yellow square": 0.0,
+        "a small purple square -> a large purple square": 1.0,
+        "a red circle -> a red square": 0.15625
+      },
+      "attribute_move": 0.3723958333333333,
+      "relation_accuracy": 0.0
+    },
+    "holdout_probe_acc": 0.01171875,
+    "heldout_per_combo": {
+      "a blue triangle": 0.03125,
+      "a red ring": 0.015625,
+      "a green star": 0.0,
+      "a yellow cross": 0.0
+    },
+    "health": {
+      "S": 1024,
+      "T_v": 256,
+      "s_eff": 968.4937738012005,
+      "alive_texel_frac": 0.4296875,
+      "node_entropy": 0.13297630846500397
+    }
+  },
+  "gates": {
+    "1_likelihood": {
+      "status": "PASS",
+      "detail": "bpd(tier>=1)=2.657 vs B0=6.284 (need margin >= 0.15); delta_c=0.248 (need >= 0.05)"
+    },
+    "2_parses": {
+      "status": "FAIL",
+      "detail": "recall t1=0.20 (>= 0.7), t2=0.22 (>= 0.5), cut F1=0.76 (>= 0.6)"
+    },
+    "3_prompt_control": {
+      "status": "FAIL",
+      "detail": "attribute-move=0.37 (>= 0.8), relation=0.00 (>= 0.7)"
+    },
+    "4_compositional": {
+      "status": "FAIL",
+      "detail": "held-out combo probe acc=0.01 (>= 0.6)"
+    },
+    "5_health": {
+      "status": "FAIL",
+      "detail": "S_eff=968 (>= 256), alive texels=43% (>= 50%)"
+    }
+  }
+}

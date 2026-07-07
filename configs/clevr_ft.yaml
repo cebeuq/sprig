@@ -1,0 +1,67 @@
+# SPRIG v0.1 CLEVR fine-tune (DESIGN.md section 7): init from the main proc2d
+# checkpoint, lr x0.3, 40k steps, 20% proc2d replay (batch-level mixing in
+# train.py). CLEVR has no tiers, so there is no tier_schedule here.
+run_name: clevr_ft
+seed: 0
+device: cuda
+
+model:
+  S: 1024
+  R: 64
+  T_v: 256
+  d: 384
+  canvas: 64
+  grid: 8
+  emb_dim: 768
+  L_max: 64
+
+data:
+  train_dir: ~/data/sprig/clevr/train
+  val_dir: ~/data/sprig/clevr/val
+  val_fast_dir: ~/data/sprig/clevr/val
+  null_emb: ~/data/sprig/t5/null.f16
+  p_null: 0.10
+  num_workers: 8
+  replay_dir: ~/data/sprig/proc2d/train   # 20% proc2d replay
+  replay_frac: 0.20
+
+train:
+  init_from: ~/runs/sprig/main64/last.pt
+  batch_size: 256
+  total_steps: 40000
+  lr_tables: 9.0e-5          # 3e-4 x 0.3
+  lr_networks: 3.0e-5        # 1e-4 x 0.3
+  betas: [0.9, 0.95]
+  weight_decay: 0.0
+  warmup_steps: 1000
+  lr_decay_steps: 40000
+  lr_min_ratio: 0.10
+  grad_clip: 1.0
+  ema: 0.9999
+  tau_start: 1.0             # temperature already annealed in the main run
+  tau_end: 1.0
+  tau_steps: 1
+  eta_update_every: 2000
+  eta_band: [0.5, 3.0]
+  eta_max: 1.5
+  eta_step_up: 0.05
+  eta_step_down: 0.05
+  eta_final_anneal_steps: 8000
+  texel_dead_frac: 0.1
+
+eval:
+  scalars_every: 500
+  val_fast_every: 2000
+  parse_every: 10000
+  full_every: 20000
+  val_fast_n: 512
+  full_val_n: 15000
+  parse_images: 32
+  prompt_grid_n: 8
+  bank_seeds: 8
+  eval_batch_size: 64
+  prompt_bank_emb: ~/data/sprig/t5/prompt_bank.pt
+
+checkpoint:
+  every_minutes: 30
+  every_steps: 10000

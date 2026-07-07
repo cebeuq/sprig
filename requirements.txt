@@ -1,0 +1,11 @@
+numpy
+pillow
+transformers
+sentencepiece
+protobuf
+tensorboard
+matplotlib
+pyyaml
+tqdm
+einops
+pytest
