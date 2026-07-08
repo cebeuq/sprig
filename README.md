@@ -4,8 +4,9 @@ tags:
   - text-to-image
   - scene-grammar
   - probabilistic-grammar
+  - neural-pcfg
+  - exact-likelihood
   - research-preview
-  - novel-architecture
 library_name: sprig
 pipeline_tag: text-to-image
 ---
@@ -13,17 +14,43 @@ pipeline_tag: text-to-image
 # SPRIG v0.1 — a text-to-image model where images are *derived*, not denoised
 
 **Research preview.** SPRIG (Stochastic Production-Rule Image Grammar) is a
-from-scratch generative architecture that is **not** a diffusion model, not
-autoregressive, not a GAN, not a VAE. A caption modulates the production
-probabilities of a learned **probabilistic scene grammar**; an image is produced
-by a single top-down **derivation** that recursively splits the canvas into
-typed regions, each painted by a learned "texel" material. Training is **exact
-maximum likelihood** — the marginal over *all* derivation trees, computed by an
-inside dynamic program (log-semiring DP). No noise process, no adversary, no
-ELBO, no token ordering.
+**text-conditioned neural probabilistic context-free grammar (PCFG) over a 2D
+region lattice**, trained by exact marginal likelihood. A caption modulates the
+production probabilities of a learned probabilistic scene grammar; an image is
+produced by a single top-down **derivation** that recursively splits the canvas
+into typed regions, each painted by a learned "texel" material. No noise
+process, no adversary, no ELBO, no token ordering.
+
+To our knowledge this is the first neural PCFG trained end-to-end for
+text-to-image generation — but the ingredients have clear ancestry, and this
+card names it (see [Lineage & related work](#lineage--related-work)): the
+training machinery is the classic inside algorithm from grammar parsing, the
+rule factorization is adapted from tensorized neural PCFGs, and the
+finite-lattice construction is formally a sum-product network. SPRIG's
+contribution is the synthesis — these pieces assembled, text-conditioned, as a
+generative image model — plus an honest pre-registered evaluation of how far
+that gets. The short version: **exact likelihood and parsing work well;
+caption→object binding does not yet.**
 
 The current release is **v0.1 at 64×64**: a proof-of-concept for the mechanism.
 ~16M trainable parameters on top of a frozen T5-base caption encoder.
+Code: [github.com/cebeuq/sprig](https://github.com/cebeuq/sprig).
+
+## The capability that works: parsing
+
+Because analysis and synthesis are the *same* grammar run in two directions,
+SPRIG can **parse** a real image: the same dynamic program that computes the
+training likelihood (sum over trees) returns, with max in place of sum, the
+most likely derivation of any image — which cuts, which symbols, which
+materials, as an inspectable tree.
+
+<p align="center"><img src="parses.png" width="900" alt="SPRIG parses of held-out scenes: inferred region trees overlaid on images"></p>
+
+Visible-cut parse F1 is **0.77** against ground-truth scene structure on
+held-out scenes. Diffusion and AR models have no equivalent of this: SPRIG's
+posterior over structure is exactly computable, so every generated or real
+image comes with a symbolic explanation of *why* each region is what it is.
+Generation itself is much more limited at v0.1 — see [Results](#results).
 
 <p align="center"><img src="samples.jpg" width="360" alt="SPRIG v0.1 samples"></p>
 
@@ -35,10 +62,6 @@ The current release is **v0.1 at 64×64**: a proof-of-concept for the mechanism.
 | Latent | noisy image | token prefix | an *unobserved random tree* summed out |
 | Training | denoising / score matching | next-token likelihood | **exact marginal likelihood** via inside DP |
 | Free bonus | — | — | a real **likelihood** + an interpretable **parse** of any image |
-
-Because analysis and synthesis are the *same* grammar run in two directions, the
-model can also **parse** a real image (infer its most likely derivation) — see
-`parses.png`. This is the strongest, most novel capability and it works well.
 
 ## Method
 
@@ -57,6 +80,37 @@ Because the lattice and the cut dictionary are finite, the marginal is computed 
 | \\(S\\) | \\(T_v\\) | \\(R\\) | \\(d\\) | canvas / grid | lattice | encoder | params |
 |---|---|---|---|---|---|---|---|
 | 1024 | 256 | 64 | 384 | 64² / 8px | 1296 regions | T5-base (frozen) | ~15.9M |
+
+## Lineage & related work
+
+SPRIG should be judged against its actual neighbors, not presented as
+parentless. The relevant lines of work:
+
+- **Stochastic image grammars** — Zhu & Mumford, *A Stochastic Grammar of
+  Images* (2006). The conceptual grandparent: scene grammars with and-or
+  graphs. Hand-designed rules, MCMC parsing, no end-to-end likelihood
+  training, no text conditioning. SPRIG learns the grammar from data by exact
+  maximum likelihood and conditions it on captions.
+- **Sum-product networks / probabilistic circuits** — Poon & Domingos, *Sum-Product
+  Networks* (2011). Any finite split dictionary on a finite region lattice
+  with an exact inside pass compiles to a decomposable sum-product circuit,
+  and the Poon–Domingos architecture used essentially this region
+  decomposition. **v0.1's finite-lattice model is formally a member of this
+  family.** What it adds within the family: a text-modulated low-rank rule
+  tensor, learned texel emissions with an illumination field, and the
+  training/health recipe reported here.
+- **Neural, compound, and tensorized PCFGs** — Kim et al., *Compound
+  Probabilistic Context-Free Grammars* (2019); Yang et al., *PCFGs Can Do
+  Better* (TN-PCFG, 2021). The rank-space rule factorization and the
+  GPU-friendly inside pass are adapted directly from this NLP toolbox — moved
+  from 1D span lattices over strings to a 2D region lattice over pixels, with
+  caption conditioning replacing the sentence.
+
+So the honest claim is not "a new paradigm with no ancestors." It is: a
+**synthesis** (text-conditioned neural PCFG + BSP region lattice + learned
+emissions, trained by exact NLL for image generation) that, as far as we know,
+had not been built and evaluated before — together with evidence about which
+parts of it work.
 
 ## Results
 
@@ -77,9 +131,28 @@ Success criteria were fixed in advance (50k steps, held-out procedural scenes):
 The architecture's structural claims prove out: it models data far better than a
 no-grammar baseline, routes caption information, recovers scene structure by
 parsing, and (after a targeted fix) paints real objects. The open problem is
-**caption→object binding**: the model can draw objects and binds size perfectly,
-but does not yet reliably paint the *specific* object a prompt asks for, and places
-too many per scene.
+**caption→object binding**: the model can draw objects and binds size perfectly
+— proof the conditioning pathway can bind an attribute — but does not yet
+reliably paint the *specific* object a prompt asks for, and places too many per
+scene. The v0.1 rule tables that pick children and texels are deliberately
+text-independent (a GPU-economy choice); routing caption signal into them is
+the next experiment.
+
+## Compute: why an exact-likelihood model trains slowly
+
+Fair question, so here is the arithmetic. Every training step computes the
+exact marginal likelihood of each image: the inside DP sums over **every
+derivation tree** — all 1,296 lattice regions × every legal cut × 1,024
+symbols × 64 rank components — and scores every leaf-eligible region against
+all 256 texels. Per-image cost is orders of magnitude more than a forward pass
+through a similarly-sized UNet or transformer; a 16M-parameter model here costs
+what a much larger conventional model would. After kernel fusion and a
+sync-free DP sweep (a 6.9× speedup over the naive implementation), throughput
+is ~98 images/s on one RTX PRO 6000 Blackwell; the v0.1 runs were 80k + 50k
+steps at batch 256 ≈ **4 GPU-days total**. This is a property of the
+objective — exact likelihood means a full dynamic program per example — and
+making it scale to higher resolution is the central open engineering problem
+of this architecture, not an implementation accident.
 
 ## Usage
 
@@ -130,7 +203,8 @@ region splits). MIT licensed — build on it.
 @software{sprig_v0_1_2026,
   title  = {SPRIG: Text-to-Image by a Stochastic Production-Rule Image Grammar (v0.1)},
   year   = {2026},
-  note   = {Research preview. Images are derived by a probabilistic scene grammar
-            trained by exact marginal likelihood, not denoised.}
+  note   = {Research preview. A text-conditioned neural PCFG over a 2D region
+            lattice, trained by exact marginal likelihood; images are derived,
+            not denoised.}
 }
 ```

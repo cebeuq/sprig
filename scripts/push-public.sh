@@ -28,12 +28,13 @@ git ls-files | grep -vE "$EXCLUDE" | while read -r f; do
   cp "$f" "$MIRROR/$f"
 done
 # Curated public landing files (source of truth lives in publish/). The README
-# is the exact Hugging Face model card, so its two embedded images must sit at
-# the repo-root paths it references (samples.jpg, figures/pipeline.png).
+# is the exact Hugging Face model card, so its embedded images must sit at
+# the repo-root paths it references (samples.jpg, parses.png, figures/pipeline.png).
 cp "$DEV/publish/README.md" "$MIRROR/README.md"
 cp "$DEV/publish/LICENSE"   "$MIRROR/LICENSE"
 mkdir -p "$MIRROR/figures"
 cp "$DEV/release/model/samples.jpg"          "$MIRROR/samples.jpg"
+cp "$DEV/release/model/parses.png"           "$MIRROR/parses.png"
 cp "$DEV/release/model/figures/pipeline.png" "$MIRROR/figures/pipeline.png"
 
 cd "$MIRROR"
