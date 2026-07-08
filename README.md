@@ -52,7 +52,7 @@ posterior over structure is exactly computable, so every generated or real
 image comes with a symbolic explanation of *why* each region is what it is.
 Generation itself is much more limited at v0.1; see [Results](#results).
 
-<p align="center"><img src="samples.jpg" width="360" alt="SPRIG v0.1 samples"></p>
+<p align="center"><img src="samples.jpg" width="660" alt="SPRIG v0.1 samples"></p>
 
 ## What SPRIG does differently
 
